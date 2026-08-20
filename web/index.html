@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opportunity Scout Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0f172a;--card:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#3b82f6;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--purple:#a855f7}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.container{max-width:1200px;margin:0 auto;padding:1rem}
+header{text-align:center;padding:2rem 0 1rem;border-bottom:1px solid var(--border)}
+header h1{font-size:1.8rem;margin-bottom:.5rem}
+header .meta{color:var(--muted);font-size:.85rem}
+.stats{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin:1.5rem 0}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;text-align:center;min-width:120px}
+.stat .num{font-size:1.8rem;font-weight:700;color:var(--accent)}
+.stat .label{font-size:.75rem;color:var(--muted);text-transform:uppercase}
+.sources{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:1.5rem}
+.source-badge{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.35rem .75rem;font-size:.8rem}
+.source-badge.error{border-color:var(--red);color:var(--red)}
+.source-badge .count{color:var(--green);font-weight:600}
+.controls{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.5rem}
+.search-row{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem}
+.search-row input{flex:1;min-width:200px;padding:.5rem .75rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.9rem}
+.search-row input:focus{outline:none;border-color:var(--accent)}
+.filter-row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.filter-row label{font-size:.8rem;color:var(--muted)}
+.filter-row select{padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.8rem}
+.filter-row select:focus{outline:none;border-color:var(--accent)}
+.btn{padding:.4rem .75rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.8rem;cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.results-info{color:var(--muted);font-size:.85rem;margin-bottom:1rem}
+.opp-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin-bottom:.75rem;transition:border-color .15s}
+.opp-card:hover{border-color:var(--accent)}
+.opp-header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:.5rem}
+.opp-title{font-size:1.05rem;font-weight:600}
+.opp-title a{color:var(--text);text-decoration:none}
+.opp-title a:hover{color:var(--accent)}
+.opp-score{font-size:1.1rem;font-weight:700;white-space:nowrap;padding:.25rem .5rem;border-radius:6px;min-width:48px;text-align:center}
+.score-high{background:rgba(34,197,94,.15);color:var(--green)}
+.score-mid{background:rgba(234,179,8,.15);color:var(--yellow)}
+.score-low{background:rgba(148,163,184,.15);color:var(--muted)}
+.opp-meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem}
+.badge{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;border-radius:4px;font-size:.75rem;background:rgba(59,130,246,.12);color:var(--accent)}
+.badge.cat-hackathon{background:rgba(168,85,247,.12);color:var(--purple)}
+.badge.cat-internship{background:rgba(34,197,94,.12);color:var(--green)}
+.badge.cat-competition{background:rgba(234,179,8,.12);color:var(--yellow)}
+.badge.fee-free{background:rgba(34,197,94,.12);color:var(--green)}
+.badge.fee-paid{background:rgba(239,68,68,.12);color:var(--red)}
+.badge.fee-stipend{background:rgba(59,130,246,.12);color:var(--accent)}
+.opp-details{font-size:.82rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem 1.25rem}
+.opp-details span{display:inline-flex;align-items:center;gap:.25rem}
+.opp-skills{margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.35rem}
+.skill-tag{padding:.15rem .4rem;border-radius:3px;font-size:.7rem;background:rgba(59,130,246,.1);color:var(--accent)}
+.skill-tag.matched{background:rgba(34,197,94,.15);color:var(--green)}
+.opp-prize{margin-top:.4rem;font-size:.82rem;color:var(--yellow)}
+.opp-eligibility{font-size:.82rem;color:var(--muted)}
+.empty{text-align:center;padding:3rem;color:var(--muted)}
+footer{text-align:center;padding:2rem 0;color:var(--muted);font-size:.8rem;border-top:1px solid var(--border);margin-top:2rem}
+@media(max-width:640px){.stats{flex-direction:column;align-items:center}.opp-header{flex-direction:column}.filter-row{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Opportunity Scout</h1>
+<p class="meta" id="generated-at"></p>
+</header>
+<div class="stats" id="stats"></div>
+<div class="sources" id="sources"></div>
+<div class="controls">
+<div class="search-row">
+<input type="text" id="search" placeholder="Search opportunities...">
+</div>
+<div class="filter-row">
+<label>Category:</label>
+<select id="filter-category"><option value="">All</option><option value="hackathon">Hackathon</option><option value="internship">Internship</option><option value="competition">Competition</option></select>
+<label>Domain:</label>
+<select id="filter-domain"><option value="">All</option><option value="ai">AI</option><option value="ml">Machine Learning</option><option value="data-science">Data Science</option><option value="data-analytics">Data Analytics</option><option value="data-engineering">Data Engineering</option></select>
+<label>Location:</label>
+<select id="filter-location"><option value="">All</option><option value="online">Online</option><option value="india">India</option></select>
+<label>Sort:</label>
+<select id="sort-by"><option value="score">Match Score</option><option value="deadline">Deadline</option></select>
+</div>
+</div>
+<p class="results-info" id="results-info"></p>
+<div id="results"></div>
+</div>
+<footer>Opportunity Scout &mdash; Auto-generated dashboard. Data refreshed twice daily.</footer>
+<script src="data.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+
+function init(){
+  if(!window.DASHBOARD_DATA||window.DASHBOARD_DATA.error){
+    $('#results').innerHTML='<div class="empty">No data available. Run the scanner first.</div>';
+    return;
+  }
+  const D=window.DASHBOARD_DATA;
+  const ts=new Date(D.generated_at);
+  $('#generated-at').textContent='Last updated: '+ts.toLocaleString()+' UTC | Source: '+D.source_file;
+
+  let statsHtml='';
+  statsHtml+=`<div class="stat"><div class="num">${D.total}</div><div class="label">Total</div></div>`;
+  statsHtml+=`<div class="stat"><div class="num">${D.strong_matches}</div><div class="label">Strong Matches</div></div>`;
+  $('#stats').innerHTML=statsHtml;
+
+  let srcHtml='';
+  for(const s of D.source_statuses){
+    const cls=s.error?'source-badge error':'source-badge';
+    srcHtml+=`<div class="${cls}">${s.name}: ${s.error?'ERROR - '+s.error.substring(0,40):'<span class="count">'+s.count+'</span>'}</div>`;
+  }
+  $('#sources').innerHTML=srcHtml;
+
+  const cards=D.opportunities;
+  function render(){
+    const q=$('#search').value.toLowerCase();
+    const cat=$('#filter-category').value;
+    const dom=$('#filter-domain').value;
+    const loc=$('#filter-location').value;
+    const sort=$('#sort-by').value;
+
+    let filtered=cards.filter(o=>{
+      if(q&&!(o.title.toLowerCase().includes(q)||o.description.toLowerCase().includes(q)||o.tags.join(' ').toLowerCase().includes(q)||o.skills_required.join(' ').toLowerCase().includes(q)))return false;
+      if(cat&&o.category!==cat)return false;
+      if(dom){
+        const allTags=[...o.tags,...o.skills_required,...o.domain].map(t=>t.toLowerCase());
+        const domMap={ai:['ai','artificial-intelligence','deep-learning','nlp','machine-learning','generative-ai','llm','computer-vision'],ml:['ml','machine-learning','deep-learning','neural-networks','ai','generative-ai','llm','computer-vision'],data-science:['data-science','machine-learning','python','statistics','analytics'],data-analytics:['data-analytics','analytics','sql','python','tableau','power-bi','excel'],data-engineering:['data-engineering','etl','spark','kafka','airflow','sql','python']};
+        const keywords=domMap[dom]||[];
+        if(!keywords.some(k=>allTags.some(t=>t.includes(k))))return false;
+      }
+      if(loc==='online'){
+        const locText=(o.location+' '+o.format+' '+o.tags.join(' ')).toLowerCase();
+        if(!locText.includes('online')&&!locText.includes('remote')&&!locText.includes('work from home')&&!locText.includes('virtual'))return false;
+      }
+      if(loc==='india'){
+        const locText=(o.location+' '+o.tags.join(' ')).toLowerCase();
+        const indiaKw=['india','bangalore','bengaluru','mumbai','pune','hyderabad','chennai','delhi','jaipur','ahmedabad','kolkata','lucknow','noida','gurgaon','gurugram','coimbatore','kochi','indore','bhopal','chandigarh','visakhapatnam','nagpur','patna'];
+        if(!indiaKw.some(k=>locText.includes(k)))return false;
+      }
+      return true;
+    });
+
+    if(sort==='score')filtered.sort((a,b)=>b.score-a.score);
+    else if(sort==='deadline'){
+      filtered.sort((a,b)=>{
+        if(!a.deadline&&!b.deadline)return 0;
+        if(!a.deadline)return 1;
+        if(!b.deadline)return -1;
+        return new Date(a.deadline)-new Date(b.deadline);
+      });
+    }
+
+    $('#results-info').textContent=`Showing ${filtered.length} of ${cards.length} opportunities`;
+
+    if(!filtered.length){
+      $('#results').innerHTML='<div class="empty">No opportunities match your filters.</div>';
+      return;
+    }
+
+    let html='';
+    for(const o of filtered){
+      const scoreCls=o.score>=0.5?'score-high':o.score>=0.3?'score-mid':'score-low';
+      const catCls=o.category==='hackathon'?'cat-hackathon':o.category==='internship'?'cat-internship':o.category==='competition'?'cat-competition':'';
+      const feeCls=o.fee_status.includes('free')?'fee-free':o.fee_status.includes('paid')?'fee-paid':o.fee_status.includes('stipend')?'fee-stipend':'';
+      const deadlineStr=o.deadline?new Date(o.deadline).toLocaleDateString():'N/A';
+      const allTags=[...o.tags,...o.skills_required,...o.domain];
+      const matchedTags=o.reasons.filter(r=>r.startsWith('Matches:')).flatMap(r=>r.replace('Matches: ','').split(', '));
+      const tagsHtml=allTags.slice(0,10).map(t=>`<span class="skill-tag${matchedTags.includes(t)?' matched':''}">${t}</span>`).join('');
+
+      html+=`<div class="opp-card">
+<div class="opp-header">
+<div class="opp-title"><a href="${o.url}" target="_blank" rel="noopener">${esc(o.title)}</a></div>
+<div class="opp-score ${scoreCls}">${o.score.toFixed(2)}</div>
+</div>
+<div class="opp-meta">
+<span class="badge ${catCls}">${o.category}</span>
+<span class="badge">${o.source}</span>
+<span class="badge ${feeCls}">${o.fee_status}</span>
+${o.eligibility?`<span class="badge">${esc(o.eligibility)}</span>`:''}
+</div>
+<div class="opp-details">
+${o.location?`<span>&#x1F4CD; ${esc(o.location)}</span>`:''}
+${o.format?`<span>&#x1F310; ${esc(o.format)}</span>`:''}
+${deadlineStr!=='N/A'?`<span>&#x23F3; ${deadlineStr}</span>`:''}
+${o.organizer?`<span>&#x1F464; ${esc(o.organizer)}</span>`:''}
+${o.registrations_count?`<span>&#x1F465; ${o.registrations_count}</span>`:''}
+</div>
+${tagsHtml?`<div class="opp-skills">${tagsHtml}</div>`:''}
+${o.prize_info?`<div class="opp-prize">&#x1F3C6; ${esc(o.prize_info)}</div>`:''}
+${o.description?`<div class="opp-eligibility">${esc(o.description.substring(0,150))}${o.description.length>150?'...':''}</div>`:''}
+</div>`;
+    }
+    $('#results').innerHTML=html;
+  }
+
+  $('#search').addEventListener('input',render);
+  $('#filter-category').addEventListener('change',render);
+  $('#filter-domain').addEventListener('change',render);
+  $('#filter-location').addEventListener('change',render);
+  $('#sort-by').addEventListener('change',render);
+  render();
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
