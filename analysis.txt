@@ -1,0 +1,241 @@
+================================================================================
+ OPPORTUNITY SCOUT — V1 ANALYSIS & V2 ARCHITECTURE PROPOSAL
+================================================================================
+
+## V1 ARCHITECTURE ANALYSIS
+
+### 1. Current Architecture
+
+main.py  →  Scanner  →  DevpostScraper  →  Devpost JSON API
+                   →  MLHScraper       →  MLH embedded JSON
+                   →  deduplicate + sort
+                   →  save to output/*.json
+
+Linear pipeline: scrape → filter expired → deduplicate → sort by deadline →
+save JSON. No user profile, no preferences, no ranking.
+
+### 2. Opportunity Data Fields
+
+    @dataclass
+    class Opportunity:
+        title: str              # Event name
+        url: str                # Link to event page
+        source: Source          # enum: devpost | mlh | unknown
+        category: Category      # enum: hackathon | internship | competition | other
+        description: str        # Only used by Devpost for prize info
+        deadline: datetime | None
+        location: str           # "Online", "Toronto, CA", etc.
+        tags: list[str]         # Themes, format, region, badges
+
+No fields for: skill requirements, team size, eligibility, cost, prize
+details, user match score, or any preference signals.
+
+### 3. Devpost Scraper
+
+- Calls devpost.com/api/hackathons?page=N (public JSON API, no auth)
+- Paginates up to max_pages=3 (144 results max)
+- Filters out open_state == "ended"
+- Parses themes into tags, prize info into description
+- Deadline parsed from submission_period_dates string via regex
+- Stops early if a page returns empty
+
+### 4. MLH Scraper
+
+- Fetches mlh.io/seasons/2026/events HTML
+- Extracts embedded Inertia.js JSON from <script data-page="app"> tag
+- Merges pastEvents + upcomingEvents arrays
+- Filters out status == "ended" AND endsAt < now (timezone-aware)
+- Parses formatType, region, customFields.underserved_types into tags
+
+### 5. Filtering
+
+- Devpost: open_state != "ended" (binary check against Devpost's own state)
+- MLH: status != "ended" AND endsAt >= now (status + time-based check)
+- No filtering by: tags, location, category, skill level, or user preferences
+- No concept of "relevance" — everything that's not expired is accepted
+
+### 6. Deduplication
+
+- Key: (title.lower().strip(), source) — same title from same source is
+  considered duplicate
+- Different titles from different sources are always kept (even if they're
+  the same event)
+- No fuzzy matching, no URL-based dedup, no cross-source similarity
+
+### 7. Results Storage
+
+- Saved to output/opportunities_YYYYMMDD_HHMMSS.json
+- Each run creates a new file (no overwrite, no history tracking)
+- Full to_dict() serialization — source/category as strings, deadline as ISO
+- No caching, no incremental updates, no reading of previous results
+
+### 8. Tests (12 total)
+
+    test_opportunity_creation          — Basic dataclass init
+    test_opportunity_to_dict           — Serialization
+    test_opportunity_from_dict         — Deserialization
+    test_opportunity_roundtrip         — Serialize → deserialize identity
+    test_scrape_returns_open_hackathons — Devpost filters ended
+    test_devpost_parses_correct_fields — Devpost field extraction
+    test_scrape_filters_ended_events   — MLH filters ended by status
+    test_scrape_parses_upcoming_fields — MLH field extraction
+    test_scrape_returns_empty_when_all_ended — MLH empty case
+    test_scrape_excludes_expired_pending_event — MLH time-based filter
+    test_deduplicates                  — Scanner dedup
+    test_save_creates_file             — JSON output
+
+No tests for: sorting, error handling edge cases, cross-source dedup,
+or end-to-end integration.
+
+### 9. What's Well Designed
+
+- Scraper abstraction — BaseScraper ABC makes adding new sources clean
+- Separation of concerns — models, scrapers, scanner, and main are independent
+- Timezone handling — MLH uses datetime.now(tz=timezone.utc) for safe comparison
+- Graceful error handling — Scanner.scan() catches per-scraper exceptions
+- Test isolation — all HTTP calls mocked, tests don't hit real APIs
+
+### 10. What Must Change for Personalization
+
+    Gap                          Why it matters
+    ──────────────────────────── ─────────────────────────────────────────
+    No user profile              Can't score relevance without knowing
+                                 the user's skills, interests, preferences
+    No relevance scoring         All results treated equally — no ranking
+                                 by match quality
+    No tag normalization         Devpost tags are freeform themes, MLH tags
+                                 mix format/region/badges — not comparable
+    No eligibility tracking      Can't filter by experience level, team size
+                                 needs, or restrictions
+    Dedup is too naive           Same event on Devpost + MLH won't be
+                                 detected; same event across years collides
+    No feedback loop             No way for user to mark results as
+                                 interesting/not, so agent can't learn
+    Description is sparse        Devpost only stores prize info; no tech
+                                 stack, skill requirements, or event details
+    Sorting is single-axis       Only sorts by deadline — no combined score
+                                 of deadline urgency + relevance
+    No persistent state          Can't track which opportunities the user
+                                 has already seen or applied to
+
+
+================================================================================
+ V2 ARCHITECTURE PROPOSAL
+================================================================================
+
+### Directory Structure
+
+    opportunity-agent/
+    ├── src/
+    │   ├── models.py              # Extended Opportunity + new Profile
+    │   ├── profile.py             # User profile: skills, interests, prefs
+    │   ├── scanner.py             # Orchestrator (largely same, minor changes)
+    │   ├── scorer.py              # Relevance scoring engine
+    │   ├── deduper.py             # Cross-source intelligent dedup
+    │   └── scrapers/
+    │       ├── base.py            # Same
+    │       ├── devpost.py         # Enhanced: extract more fields
+    │       └── mlh.py             # Enhanced: extract more fields
+    ├── profiles/
+    │   └── default.json           # Default user profile
+    ├── tests/
+    │   ├── test_models.py
+    │   ├── test_profile.py        # NEW
+    │   ├── test_scorer.py         # NEW
+    │   ├── test_deduper.py        # NEW
+    │   └── test_scrapers.py
+    ├── output/
+    ├── main.py                    # Updated: load profile, rank, display
+    └── requirements.txt           # Same (no new deps)
+
+### Key New Components
+
+#### Profile (profile.py)
+
+User preferences stored as JSON:
+
+    @dataclass
+    class Profile:
+        skills: list[str]              # ["python", "machine-learning", "web"]
+        interests: list[str]           # ["ai", "social-good", "fintech"]
+        experience_level: str          # "beginner" | "intermediate" | "advanced"
+        preferred_formats: list[str]   # ["online", "in-person"]
+        preferred_categories: list[str] # ["hackathon", "competition"]
+        max_team_size: int | None
+        location_preference: str       # "any" | "online-only" | specific region
+        excluded_tags: list[str]       # tags to actively avoid
+
+#### Scorer (scorer.py)
+
+Scores each opportunity against the profile:
+
+- Tag overlap — Jaccard similarity between opportunity tags and profile
+  skills/interests
+- Category match — bonus if category matches preference
+- Format match — bonus if format matches preference
+- Deadline urgency — slight bonus for events further out (more prep time),
+  slight penalty for very near deadlines
+- Location match — bonus for online or matching region
+- Experience fit — penalty if event is clearly advanced but user is beginner
+
+Returns a ScoredOpportunity with score: float (0.0–1.0).
+
+#### Deduper (deduper.py)
+
+Smarter deduplication:
+
+- Normalize titles (lowercase, strip punctuation, remove "2026"/"v2" suffixes)
+- URL domain+path similarity (catches same event with different query params)
+- Cross-source detection: if Devpost event title fuzzy-matches MLH event
+  title, keep the one with more data
+
+#### Enhanced Scrapers
+
+Extract additional fields from existing APIs:
+
+- Devpost: registrations_count, prizes array (not just amount), full
+  submission_period_dates
+- MLH: venueAddress details, websiteUrl, customFields
+- Both: normalize tags to a common taxonomy (skills, format, domain)
+
+### Changes to Existing Components
+
+#### models.py — Add to Opportunity:
+
+    # New optional fields (backward-compatible defaults)
+    skills_required: list[str] = None
+    team_size_range: str = ""       # "1-4", "solo-only", etc.
+    experience_level: str = ""      # "beginner", "all", "advanced"
+    format: str = ""                # "online", "in-person", "hybrid"
+    domain: list[str] = None        # ["ai", "web", "mobile"]
+
+#### scanner.py — After dedup, pass opportunities through scorer:
+
+    scrape → filter expired → dedup → score against profile →
+    sort by score → return
+
+#### main.py — Load profile, display top-N with scores:
+
+    1. [0.92] NeuralSprint (Deadline: Aug 24) — Matches: ML/AI, Web, Online
+    2. [0.87] ImpactForge (Deadline: Aug 24) — Matches: Social Good, Online
+    ...
+
+### Scoring Formula (draft)
+
+    score = (
+        0.35 * tag_overlap(profile.interests + profile.skills, opp.tags) +
+        0.20 * category_match(profile.preferred_categories, opp.category) +
+        0.15 * format_match(profile.preferred_formats, opp.format) +
+        0.15 * deadline_suitability(opp.deadline) +
+        0.10 * location_match(profile.location_preference, opp.location) +
+        0.05 * experience_fit(profile.experience_level, opp.experience_level)
+    )
+
+### Implementation Priority
+
+    1. Profile model + JSON loading       — foundation for everything
+    2. Tag normalization                  — required before scoring can work
+    3. Scorer                             — core personalization engine
+    4. Enhanced deduper                   — clean up cross-source noise
+    5. Updated main.py                    — display ranked results
+    6. Tests for profile, scorer, deduper

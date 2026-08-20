@@ -1,0 +1,31 @@
+{
+  "skills": [
+    "python",
+    "sql",
+    "artificial intelligence",
+    "machine learning",
+    "data science",
+    "data analytics",
+    "data engineering"
+  ],
+  "interests": [
+    "artificial intelligence",
+    "machine learning",
+    "data science",
+    "data analytics",
+    "data engineering"
+  ],
+  "experience_level": "beginner",
+  "preferred_formats": [
+    "online",
+    "in-person"
+  ],
+  "preferred_categories": [
+    "hackathon",
+    "internship"
+  ],
+  "location_preference": "india-or-online",
+  "excluded_tags": [
+    "paid-entry"
+  ]
+}
